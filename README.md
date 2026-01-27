@@ -1,36 +1,156 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Costs Management
 
-## Getting Started
+A web application for managing company fixed/operational costs by month/year.
 
-First, run the development server:
+## Features
+
+- **Authentication**: Secure login with role-based access (Admin/User)
+- **Cost Entry**: Enter costs by month for each category/item
+- **User Management**: Admin can create/edit/deactivate users
+- **Category Management**: Admin can manage categories, users can add items
+- **Database**: PostgreSQL with Prisma ORM (compatible with PowerBI export)
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router) + TypeScript
+- **UI**: Tailwind CSS + shadcn/ui
+- **Auth**: NextAuth v5 (Auth.js)
+- **Database**: PostgreSQL (Vercel Postgres / Neon) + Prisma
+- **Deployment**: Vercel
+
+## Local Development
+
+### 1. Clone and install dependencies
+
+```bash
+git clone <repository-url>
+cd costs-management
+npm install
+```
+
+### 2. Set up environment variables
+
+Copy the example env file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your database credentials:
+
+```env
+# Database (Vercel Postgres / Neon)
+DATABASE_URL="postgresql://user:password@host:5432/database?sslmode=require"
+DIRECT_URL="postgresql://user:password@host:5432/database?sslmode=require"
+
+# NextAuth - generate with: openssl rand -base64 32
+AUTH_SECRET="your-random-secret-here"
+
+# Admin seed account
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="admin123"
+```
+
+### 3. Set up database
+
+Push schema to database:
+
+```bash
+npm run db:push
+```
+
+Seed initial data (categories, items, admin user):
+
+```bash
+npm run db:seed
+```
+
+### 4. Run development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment to Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Create Vercel Postgres database
 
-## Learn More
+1. Go to Vercel Dashboard → Storage → Create Database → Postgres
+2. Copy connection strings to your Vercel project environment variables
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Set environment variables in Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Add these environment variables in Vercel project settings:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `DATABASE_URL` - Postgres connection string (pooled)
+- `DIRECT_URL` - Postgres direct connection string
+- `AUTH_SECRET` - Random secret for NextAuth
+- `ADMIN_EMAIL` - Initial admin email
+- `ADMIN_PASSWORD` - Initial admin password
 
-## Deploy on Vercel
+### 3. Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+vercel --prod
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+After first deploy, run seed manually (or use Vercel CLI):
+
+```bash
+npx prisma db seed
+```
+
+## Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:push` | Push schema to database |
+| `npm run db:seed` | Seed database with initial data |
+| `npm run db:studio` | Open Prisma Studio |
+
+## Pages
+
+| Route | Description | Access |
+|-------|-------------|--------|
+| `/login` | Login page | Public |
+| `/costs` | Cost entry form | User, Admin |
+| `/admin/users` | User management | Admin only |
+| `/admin/categories` | Category management | Admin only |
+
+## Data Model
+
+```
+User
+├── id, email, name, passwordHash, role, isActive, timestamps
+
+Category
+├── id, name, sortOrder, timestamps
+└── costItems[]
+
+CostItem
+├── id, name, categoryId, sortOrder, timestamps
+└── costEntries[]
+
+CostEntry
+├── id, year, month, costItemId, amount, createdById, timestamps
+└── unique: (year, month, costItemId)
+```
+
+## Roles & Permissions
+
+| Permission | Admin | User |
+|------------|-------|------|
+| View/Enter costs | ✅ | ✅ |
+| Add items to category | ✅ | ✅ |
+| Manage categories | ✅ | ❌ |
+| Manage users | ✅ | ❌ |
+
+## License
+
+Private
