@@ -25,6 +25,7 @@ export function Navbar() {
       ? [
           { href: "/admin/users", label: "Users" },
           { href: "/admin/categories", label: "Categories" },
+          { href: "/admin/audit", label: "Audit Log" },
         ]
       : []),
   ];
