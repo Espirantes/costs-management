@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/lib/audit";
 
 async function requireAdmin() {
   const session = await auth();
@@ -56,7 +57,7 @@ export async function createCategory(name: string) {
     _max: { sortOrder: true },
   });
 
-  await prisma.category.create({
+  const category = await prisma.category.create({
     data: {
       name,
       sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
@@ -64,16 +65,38 @@ export async function createCategory(name: string) {
     },
   });
 
+  await logAudit({
+    userId: session.user.id,
+    action: "CREATE",
+    entity: "Category",
+    entityId: category.id,
+    newValue: { name },
+  });
+
   revalidatePath("/admin/categories");
   revalidatePath("/costs");
 }
 
 export async function updateCategory(id: string, name: string) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const oldCategory = await prisma.category.findUnique({
+    where: { id },
+    select: { name: true },
+  });
 
   await prisma.category.update({
     where: { id },
     data: { name },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "UPDATE",
+    entity: "Category",
+    entityId: id,
+    oldValue: oldCategory ?? undefined,
+    newValue: { name },
   });
 
   revalidatePath("/admin/categories");
@@ -81,10 +104,23 @@ export async function updateCategory(id: string, name: string) {
 }
 
 export async function deleteCategory(id: string) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const category = await prisma.category.findUnique({
+    where: { id },
+    select: { name: true },
+  });
 
   await prisma.category.delete({
     where: { id },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "DELETE",
+    entity: "Category",
+    entityId: id,
+    oldValue: category ?? undefined,
   });
 
   revalidatePath("/admin/categories");
@@ -99,7 +135,7 @@ export async function createCostItem(categoryId: string, name: string) {
     _max: { sortOrder: true },
   });
 
-  await prisma.costItem.create({
+  const costItem = await prisma.costItem.create({
     data: {
       name,
       categoryId,
@@ -108,16 +144,38 @@ export async function createCostItem(categoryId: string, name: string) {
     },
   });
 
+  await logAudit({
+    userId: session.user.id,
+    action: "CREATE",
+    entity: "CostItem",
+    entityId: costItem.id,
+    newValue: { name, categoryId },
+  });
+
   revalidatePath("/admin/categories");
   revalidatePath("/costs");
 }
 
 export async function updateCostItem(id: string, name: string) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const oldItem = await prisma.costItem.findUnique({
+    where: { id },
+    select: { name: true },
+  });
 
   await prisma.costItem.update({
     where: { id },
     data: { name },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "UPDATE",
+    entity: "CostItem",
+    entityId: id,
+    oldValue: oldItem ?? undefined,
+    newValue: { name },
   });
 
   revalidatePath("/admin/categories");
@@ -125,10 +183,23 @@ export async function updateCostItem(id: string, name: string) {
 }
 
 export async function deleteCostItem(id: string) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const costItem = await prisma.costItem.findUnique({
+    where: { id },
+    select: { name: true, categoryId: true },
+  });
 
   await prisma.costItem.delete({
     where: { id },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "DELETE",
+    entity: "CostItem",
+    entityId: id,
+    oldValue: costItem ?? undefined,
   });
 
   revalidatePath("/admin/categories");

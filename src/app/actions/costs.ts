@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/lib/audit";
 
 async function requireAuth() {
   const session = await auth();
@@ -63,7 +64,18 @@ export async function upsertCostEntry(
     throw new Error("Cost item not found");
   }
 
-  await prisma.costEntry.upsert({
+  // Get existing entry for audit log
+  const existingEntry = await prisma.costEntry.findUnique({
+    where: {
+      year_month_costItemId: {
+        year,
+        month,
+        costItemId,
+      },
+    },
+  });
+
+  const entry = await prisma.costEntry.upsert({
     where: {
       year_month_costItemId: {
         year,
@@ -81,6 +93,15 @@ export async function upsertCostEntry(
     update: {
       amount,
     },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: existingEntry ? "UPDATE" : "CREATE",
+    entity: "CostEntry",
+    entityId: entry.id,
+    oldValue: existingEntry ? { amount: Number(existingEntry.amount), year, month } : undefined,
+    newValue: { amount, year, month, costItemName: costItem.name },
   });
 
   revalidatePath("/costs");

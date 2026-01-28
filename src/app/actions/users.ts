@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/lib/audit";
 
 async function requireAdmin() {
   const session = await auth();
@@ -35,7 +36,7 @@ export async function createUser(data: {
   password: string;
   role: Role;
 }) {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const existing = await prisma.user.findUnique({
     where: { email: data.email },
@@ -47,13 +48,21 @@ export async function createUser(data: {
 
   const passwordHash = await bcrypt.hash(data.password, 10);
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email: data.email,
       name: data.name,
       passwordHash,
       role: data.role,
     },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "CREATE",
+    entity: "User",
+    entityId: user.id,
+    newValue: { email: data.email, name: data.name, role: data.role },
   });
 
   revalidatePath("/admin/users");
@@ -67,24 +76,51 @@ export async function updateUser(
     isActive?: boolean;
   }
 ) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const oldUser = await prisma.user.findUnique({
+    where: { id },
+    select: { name: true, role: true, isActive: true, email: true },
+  });
 
   await prisma.user.update({
     where: { id },
     data,
   });
 
+  await logAudit({
+    userId: session.user.id,
+    action: "UPDATE",
+    entity: "User",
+    entityId: id,
+    oldValue: oldUser ?? undefined,
+    newValue: { ...data, email: oldUser?.email },
+  });
+
   revalidatePath("/admin/users");
 }
 
 export async function resetPassword(id: string, newPassword: string) {
-  await requireAdmin();
+  const session = await requireAdmin();
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { email: true },
+  });
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
 
   await prisma.user.update({
     where: { id },
     data: { passwordHash },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "UPDATE",
+    entity: "User",
+    entityId: id,
+    newValue: { passwordReset: true, email: user?.email },
   });
 
   revalidatePath("/admin/users");
@@ -97,8 +133,21 @@ export async function deleteUser(id: string) {
     throw new Error("Cannot delete your own account");
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { email: true, name: true, role: true },
+  });
+
   await prisma.user.delete({
     where: { id },
+  });
+
+  await logAudit({
+    userId: session.user.id,
+    action: "DELETE",
+    entity: "User",
+    entityId: id,
+    oldValue: user ?? undefined,
   });
 
   revalidatePath("/admin/users");
