@@ -12,8 +12,9 @@ export async function login(formData: FormData) {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/costs",
+      redirect: false,
     });
+    return { success: true };
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;

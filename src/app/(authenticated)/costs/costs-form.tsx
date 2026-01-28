@@ -207,7 +207,7 @@ function CategorySection({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-3">
         {category.costItems.map((item) => (
           <CostItemInput
             key={item.id}
@@ -306,8 +306,8 @@ function CostItemInput({
   }
 
   return (
-    <div className="flex items-center gap-4 py-2">
-      <span className="flex-1 text-sm">{item.name}</span>
+    <div className="flex items-center gap-4 py-3 px-4 border rounded-lg bg-white">
+      <span className="flex-1 text-sm font-medium">{item.name}</span>
       <div className="flex items-center gap-2">
         <Input
           type="number"
