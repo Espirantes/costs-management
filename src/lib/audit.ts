@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 
 type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGIN_FAILED" | "LOGOUT";
 type AuditEntity = "User" | "Category" | "CostItem" | "CostEntry" | "Session";
@@ -27,8 +28,8 @@ export async function logAudit({
         action,
         entity,
         entityId,
-        oldValue: oldValue ?? undefined,
-        newValue: newValue ?? undefined,
+        oldValue: oldValue ? (oldValue as Prisma.InputJsonValue) : Prisma.JsonNull,
+        newValue: newValue ? (newValue as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
     });
   } catch (error) {
