@@ -191,25 +191,25 @@ export function AuditTable({
                 </TableCell>
                 <TableCell>
                   <div className="text-xs text-gray-600 max-w-md">
-                    {log.oldValue && (
+                    {log.oldValue ? (
                       <div className="mb-1">
                         <span className="font-medium text-red-600">Old: </span>
                         <code className="bg-gray-100 px-1 rounded">
                           {formatValue(log.oldValue)}
                         </code>
                       </div>
-                    )}
-                    {log.newValue && (
+                    ) : null}
+                    {log.newValue ? (
                       <div>
                         <span className="font-medium text-green-600">New: </span>
                         <code className="bg-gray-100 px-1 rounded">
                           {formatValue(log.newValue)}
                         </code>
                       </div>
-                    )}
-                    {!log.oldValue && !log.newValue && (
+                    ) : null}
+                    {!log.oldValue && !log.newValue ? (
                       <span className="text-gray-400">-</span>
-                    )}
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
