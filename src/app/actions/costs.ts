@@ -100,39 +100,34 @@ export async function upsertCostEntry(
 
   const actualShopId: string | null = isOrgView ? null : shopId;
 
-  // Get existing entry for audit log
-  const existingEntry = await prisma.costEntry.findUnique({
+  // Prisma can't match null in compound unique constraints, so we use findFirst + manual create/update
+  const existingEntry = await prisma.costEntry.findFirst({
     where: {
-      year_month_shopId_costItemId: {
-        year,
-        month,
-        shopId: actualShopId as any,
-        costItemId,
-      },
+      year,
+      month,
+      shopId: actualShopId,
+      costItemId,
     },
   });
 
-  const entry = await prisma.costEntry.upsert({
-    where: {
-      year_month_shopId_costItemId: {
+  let entry;
+  if (existingEntry) {
+    entry = await prisma.costEntry.update({
+      where: { id: existingEntry.id },
+      data: { amount },
+    });
+  } else {
+    entry = await prisma.costEntry.create({
+      data: {
         year,
         month,
         shopId: actualShopId as any,
         costItemId,
+        amount,
+        createdById: userId,
       },
-    },
-    create: {
-      year,
-      month,
-      shopId: actualShopId as any,
-      costItemId,
-      amount,
-      createdById: userId,
-    },
-    update: {
-      amount,
-    },
-  });
+    });
+  }
 
   await logAudit({
     userId,
@@ -208,31 +203,37 @@ export async function bulkUpsertCostEntries(
   }
 
   // Use transaction for bulk update
-  await prisma.$transaction(
-    entries.map((entry) =>
-      prisma.costEntry.upsert({
+  // Prisma can't match null in compound unique constraints, so we use findFirst + manual create/update
+  await prisma.$transaction(async (tx) => {
+    for (const entry of entries) {
+      const existing = await tx.costEntry.findFirst({
         where: {
-          year_month_shopId_costItemId: {
+          year,
+          month,
+          shopId: actualShopId,
+          costItemId: entry.costItemId,
+        },
+      });
+
+      if (existing) {
+        await tx.costEntry.update({
+          where: { id: existing.id },
+          data: { amount: entry.amount },
+        });
+      } else {
+        await tx.costEntry.create({
+          data: {
             year,
             month,
             shopId: actualShopId as any,
             costItemId: entry.costItemId,
+            amount: entry.amount,
+            createdById: userId,
           },
-        },
-        create: {
-          year,
-          month,
-          shopId: actualShopId as any,
-          costItemId: entry.costItemId,
-          amount: entry.amount,
-          createdById: userId,
-        },
-        update: {
-          amount: entry.amount,
-        },
-      })
-    )
-  );
+        });
+      }
+    }
+  });
 
   revalidatePath("/costs");
 }
