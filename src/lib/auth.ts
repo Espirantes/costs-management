@@ -65,10 +65,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "USER";
-        session.user.currentOrganizationId = token.currentOrganizationId as
-          | string
-          | null
-          | undefined;
+
+        // If currentOrganizationId is missing (old session), fetch from DB
+        let orgId = token.currentOrganizationId as string | null | undefined;
+        if (!orgId && token.id) {
+          const userWithOrg = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            include: {
+              organizationUsers: {
+                take: 1,
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          });
+          orgId = userWithOrg?.organizationUsers[0]?.organizationId;
+        }
+
+        session.user.currentOrganizationId = orgId;
       }
       return session;
     },
