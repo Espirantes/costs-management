@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { Prisma } from "@prisma/client";
 
 type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGIN_FAILED" | "LOGOUT";
-type AuditEntity = "User" | "Category" | "CostItem" | "CostEntry" | "Session";
+type AuditEntity = "User" | "Category" | "CostItem" | "CostEntry" | "Session" | "Organization" | "Shop";
 
 export async function logAudit({
   userId,
@@ -13,6 +13,7 @@ export async function logAudit({
   entityId,
   oldValue,
   newValue,
+  organizationId,
 }: {
   userId: string;
   action: AuditAction;
@@ -20,6 +21,7 @@ export async function logAudit({
   entityId?: string;
   oldValue?: Record<string, unknown>;
   newValue?: Record<string, unknown>;
+  organizationId?: string;
 }) {
   try {
     await prisma.auditLog.create({
@@ -30,6 +32,7 @@ export async function logAudit({
         entityId,
         oldValue: oldValue ? (oldValue as Prisma.InputJsonValue) : Prisma.JsonNull,
         newValue: newValue ? (newValue as Prisma.InputJsonValue) : Prisma.JsonNull,
+        organizationId,
       },
     });
   } catch (error) {

@@ -24,6 +24,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
@@ -40,6 +47,7 @@ type CostItem = {
 type Category = {
   id: string;
   name: string;
+  scope: "ORGANIZATION" | "SHOP";
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -63,16 +71,18 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
 function CreateCategoryDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<"ORGANIZATION" | "SHOP">("SHOP");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      await createCategory(name);
+      await createCategory(name, scope);
       toast.success("Category created");
       setOpen(false);
       setName("");
+      setScope("SHOP");
     } catch (error) {
       toast.error("Failed to create category");
     }
@@ -98,6 +108,21 @@ function CreateCategoryDialog() {
               required
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="category-scope">Scope</Label>
+            <Select value={scope} onValueChange={(v) => setScope(v as "ORGANIZATION" | "SHOP")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                <SelectItem value="SHOP">E-shop</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">
+              Organization: shared across all shops. E-shop: separate for each shop.
+            </p>
+          </div>
           <div className="flex justify-end space-x-2">
             <Button
               type="button"
@@ -118,17 +143,18 @@ function CreateCategoryDialog() {
 
 function CategoryCard({ category }: { category: Category }) {
   const [editName, setEditName] = useState(category.name);
+  const [editScope, setEditScope] = useState(category.scope);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSave() {
-    if (editName === category.name) {
+    if (editName === category.name && editScope === category.scope) {
       setIsEditing(false);
       return;
     }
     setLoading(true);
     try {
-      await updateCategory(category.id, editName);
+      await updateCategory(category.id, editName, editScope);
       toast.success("Category updated");
       setIsEditing(false);
     } catch (error) {
@@ -160,6 +186,18 @@ function CategoryCard({ category }: { category: Category }) {
                 onChange={(e) => setEditName(e.target.value)}
                 className="max-w-md"
               />
+              <Select
+                value={editScope}
+                onValueChange={(v) => setEditScope(v as "ORGANIZATION" | "SHOP")}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                  <SelectItem value="SHOP">E-shop</SelectItem>
+                </SelectContent>
+              </Select>
               <Button size="sm" onClick={handleSave} disabled={loading}>
                 Save
               </Button>
@@ -169,6 +207,7 @@ function CategoryCard({ category }: { category: Category }) {
                 onClick={() => {
                   setIsEditing(false);
                   setEditName(category.name);
+                  setEditScope(category.scope);
                 }}
               >
                 Cancel
@@ -176,7 +215,18 @@ function CategoryCard({ category }: { category: Category }) {
             </div>
           ) : (
             <>
-              <CardTitle className="text-lg">{category.name}</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">{category.name}</CardTitle>
+                <span
+                  className={`text-xs px-2 py-1 rounded ${
+                    category.scope === "ORGANIZATION"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-green-100 text-green-700"
+                  }`}
+                >
+                  {category.scope === "ORGANIZATION" ? "Organization" : "E-shop"}
+                </span>
+              </div>
               <div className="space-x-2">
                 <Button
                   size="sm"

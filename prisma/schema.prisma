@@ -13,6 +13,63 @@ enum Role {
   USER
 }
 
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum CategoryScope {
+  ORGANIZATION
+  SHOP
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy         User?              @relation("OrganizationCreator", fields: [createdById], references: [id])
+  createdById       String?
+  shops             Shop[]
+  categories        Category[]
+  organizationUsers OrganizationUser[]
+}
+
+model Shop {
+  id             String   @id @default(cuid())
+  name           String
+  displayName    String?
+  sortOrder      Int      @default(0)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categories   Category[]
+  costEntries  CostEntry[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model OrganizationUser {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgRole  @default(MEMBER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -25,23 +82,33 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  createdCategories Category[]
-  createdCostItems  CostItem[]
-  costEntries       CostEntry[]
-  auditLogs         AuditLog[]
+  createdCategories    Category[]
+  createdCostItems     CostItem[]
+  costEntries          CostEntry[]
+  auditLogs            AuditLog[]
+  organizationUsers    OrganizationUser[]
+  createdOrganizations Organization[]     @relation("OrganizationCreator")
 }
 
 model Category {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  sortOrder      Int           @default(0)
+  scope          CategoryScope @default(SHOP)
+  organizationId String
+  shopId         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  createdBy   User?   @relation(fields: [createdById], references: [id])
-  createdById String?
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  shop         Shop?        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id])
+  createdById  String?
+  costItems    CostItem[]
 
-  costItems CostItem[]
+  @@unique([organizationId, name, shopId])
+  @@index([organizationId])
+  @@index([shopId])
 }
 
 model CostItem {
@@ -63,35 +130,39 @@ model CostItem {
 }
 
 model CostEntry {
-  id        String   @id @default(cuid())
-  year      Int
-  month     Int
-  amount    Decimal  @db.Decimal(15, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  costItem   CostItem @relation(fields: [costItemId], references: [id], onDelete: Cascade)
-  costItemId String
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
+  id          String   @id @default(cuid())
+  year        Int
+  month       Int
+  amount      Decimal  @db.Decimal(15, 2)
+  shopId      String?
+  costItemId  String
   createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@unique([year, month, costItemId])
+  shop      Shop?    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  costItem  CostItem @relation(fields: [costItemId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@unique([year, month, shopId, costItemId])
   @@index([year, month])
+  @@index([shopId])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  action    String   // CREATE, UPDATE, DELETE
-  entity    String   // User, Category, CostItem, CostEntry
-  entityId  String?
-  oldValue  Json?
-  newValue  Json?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  action         String   // CREATE, UPDATE, DELETE
+  entity         String   // User, Category, CostItem, CostEntry, Organization, Shop
+  entityId       String?
+  oldValue       Json?
+  newValue       Json?
+  organizationId String?
+  createdAt      DateTime @default(now())
 
   @@index([userId])
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([organizationId])
 }

@@ -1,41 +1,48 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import {
+  requireOrganization,
+  requireOrgAdmin,
+} from "@/lib/organization-context";
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
-    throw new Error("Unauthorized");
+export async function getCategories(shopId?: string) {
+  const { organizationId } = await requireOrganization();
+
+  // If no shopId provided (admin view), return all categories
+  // If shopId is "ORGANIZATION", get only ORGANIZATION scope categories
+  // If shopId is a specific shop, get only SHOP scope categories
+  const whereClause: any = { organizationId };
+
+  if (shopId) {
+    const isOrgView = shopId === "ORGANIZATION";
+    whereClause.scope = isOrgView ? "ORGANIZATION" : "SHOP";
   }
-  return session;
-}
 
-async function requireAuth() {
-  const session = await auth();
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-  return session;
-}
-
-export async function getCategories() {
-  await requireAuth();
   return prisma.category.findMany({
-    orderBy: { sortOrder: "asc" },
+    where: whereClause,
+    orderBy: [{ scope: "asc" }, { sortOrder: "asc" }],
     include: {
       costItems: {
         orderBy: { sortOrder: "asc" },
       },
+      shop: true,
     },
   });
 }
 
-export async function getCategoriesWithItems() {
-  await requireAuth();
+export async function getCategoriesWithItems(shopId?: string) {
+  const { organizationId } = await requireOrganization();
+
+  const isOrgView = shopId === "ORGANIZATION";
+
   return prisma.category.findMany({
+    where: {
+      organizationId,
+      scope: isOrgView ? "ORGANIZATION" : "SHOP",
+    },
     orderBy: { sortOrder: "asc" },
     include: {
       costItems: {
@@ -46,57 +53,85 @@ export async function getCategoriesWithItems() {
           categoryId: true,
         },
       },
+      shop: {
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+        },
+      },
     },
   });
 }
 
-export async function createCategory(name: string) {
-  const session = await requireAdmin();
+export async function createCategory(
+  name: string,
+  scope: "ORGANIZATION" | "SHOP"
+) {
+  const { userId, organizationId } = await requireOrgAdmin();
 
   const maxOrder = await prisma.category.aggregate({
+    where: { organizationId, scope },
     _max: { sortOrder: true },
   });
 
   const category = await prisma.category.create({
     data: {
       name,
+      scope,
       sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
-      createdById: session.user.id,
+      organizationId,
+      createdById: userId,
     },
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "CREATE",
     entity: "Category",
     entityId: category.id,
-    newValue: { name },
+    newValue: { name, scope },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");
   revalidatePath("/costs");
 }
 
-export async function updateCategory(id: string, name: string) {
-  const session = await requireAdmin();
+export async function updateCategory(
+  id: string,
+  name: string,
+  scope?: "ORGANIZATION" | "SHOP"
+) {
+  const { userId, organizationId } = await requireOrgAdmin();
 
   const oldCategory = await prisma.category.findUnique({
     where: { id },
-    select: { name: true },
+    select: { name: true, scope: true, organizationId: true },
   });
+
+  if (!oldCategory || oldCategory.organizationId !== organizationId) {
+    throw new Error("Category not found or doesn't belong to your organization");
+  }
+
+  const updateData: any = { name };
+  if (scope) {
+    updateData.scope = scope;
+  }
 
   await prisma.category.update({
     where: { id },
-    data: { name },
+    data: updateData,
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "UPDATE",
     entity: "Category",
     entityId: id,
-    oldValue: oldCategory ?? undefined,
-    newValue: { name },
+    oldValue: { name: oldCategory.name, scope: oldCategory.scope },
+    newValue: { name, scope: scope || oldCategory.scope },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");
@@ -104,23 +139,28 @@ export async function updateCategory(id: string, name: string) {
 }
 
 export async function deleteCategory(id: string) {
-  const session = await requireAdmin();
+  const { userId, organizationId } = await requireOrgAdmin();
 
   const category = await prisma.category.findUnique({
     where: { id },
-    select: { name: true },
+    select: { name: true, organizationId: true },
   });
+
+  if (!category || category.organizationId !== organizationId) {
+    throw new Error("Category not found or doesn't belong to your organization");
+  }
 
   await prisma.category.delete({
     where: { id },
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "DELETE",
     entity: "Category",
     entityId: id,
-    oldValue: category ?? undefined,
+    oldValue: { name: category.name },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");
@@ -128,7 +168,16 @@ export async function deleteCategory(id: string) {
 }
 
 export async function createCostItem(categoryId: string, name: string) {
-  const session = await requireAuth();
+  const { userId, organizationId } = await requireOrganization();
+
+  // Verify category belongs to organization
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+  });
+
+  if (!category || category.organizationId !== organizationId) {
+    throw new Error("Category not found or doesn't belong to your organization");
+  }
 
   const maxOrder = await prisma.costItem.aggregate({
     where: { categoryId },
@@ -140,16 +189,17 @@ export async function createCostItem(categoryId: string, name: string) {
       name,
       categoryId,
       sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
-      createdById: session.user.id,
+      createdById: userId,
     },
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "CREATE",
     entity: "CostItem",
     entityId: costItem.id,
     newValue: { name, categoryId },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");
@@ -157,12 +207,21 @@ export async function createCostItem(categoryId: string, name: string) {
 }
 
 export async function updateCostItem(id: string, name: string) {
-  const session = await requireAdmin();
+  const { userId, organizationId } = await requireOrgAdmin();
 
   const oldItem = await prisma.costItem.findUnique({
     where: { id },
-    select: { name: true },
+    select: {
+      name: true,
+      category: {
+        select: { organizationId: true },
+      },
+    },
   });
+
+  if (!oldItem || oldItem.category.organizationId !== organizationId) {
+    throw new Error("Cost item not found or doesn't belong to your organization");
+  }
 
   await prisma.costItem.update({
     where: { id },
@@ -170,12 +229,13 @@ export async function updateCostItem(id: string, name: string) {
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "UPDATE",
     entity: "CostItem",
     entityId: id,
-    oldValue: oldItem ?? undefined,
+    oldValue: { name: oldItem.name },
     newValue: { name },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");
@@ -183,23 +243,34 @@ export async function updateCostItem(id: string, name: string) {
 }
 
 export async function deleteCostItem(id: string) {
-  const session = await requireAdmin();
+  const { userId, organizationId } = await requireOrgAdmin();
 
   const costItem = await prisma.costItem.findUnique({
     where: { id },
-    select: { name: true, categoryId: true },
+    select: {
+      name: true,
+      categoryId: true,
+      category: {
+        select: { organizationId: true },
+      },
+    },
   });
+
+  if (!costItem || costItem.category.organizationId !== organizationId) {
+    throw new Error("Cost item not found or doesn't belong to your organization");
+  }
 
   await prisma.costItem.delete({
     where: { id },
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: "DELETE",
     entity: "CostItem",
     entityId: id,
-    oldValue: costItem ?? undefined,
+    oldValue: { name: costItem.name, categoryId: costItem.categoryId },
+    organizationId,
   });
 
   revalidatePath("/admin/categories");

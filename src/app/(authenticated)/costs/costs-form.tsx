@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getCostEntries, upsertCostEntry } from "@/app/actions/costs";
-import { createCostItem } from "@/app/actions/categories";
+import { createCostItem, getCategoriesWithItems } from "@/app/actions/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,6 +19,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import { ShopSelector } from "@/components/shop-selector";
+import { Building2 } from "lucide-react";
 
 type CostItem = {
   id: string;
@@ -56,17 +58,37 @@ const months = [
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 
-export function CostsForm({ categories }: { categories: Category[] }) {
+export function CostsForm({
+  organizationName
+}: {
+  organizationName: string;
+}) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedShop, setSelectedShop] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
   const [entries, setEntries] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
 
+  const loadCategories = useCallback(async () => {
+    if (!selectedShop) return;
+    setCategoriesLoading(true);
+    try {
+      const data = await getCategoriesWithItems(selectedShop);
+      setCategories(data);
+    } catch (error) {
+      toast.error("Failed to load categories");
+    }
+    setCategoriesLoading(false);
+  }, [selectedShop]);
+
   const loadEntries = useCallback(async () => {
+    if (!selectedShop) return;
     setLoading(true);
     try {
-      const data = await getCostEntries(selectedYear, selectedMonth);
+      const data = await getCostEntries(selectedYear, selectedMonth, selectedShop);
       const entriesMap: Record<string, number> = {};
       data.forEach((entry: CostEntry) => {
         entriesMap[entry.costItemId] = entry.amount;
@@ -76,16 +98,21 @@ export function CostsForm({ categories }: { categories: Category[] }) {
       toast.error("Failed to load entries");
     }
     setLoading(false);
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, selectedShop]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   useEffect(() => {
     loadEntries();
   }, [loadEntries]);
 
   async function handleSave(costItemId: string, amount: number) {
+    if (!selectedShop) return;
     setSaving(costItemId);
     try {
-      await upsertCostEntry(costItemId, selectedYear, selectedMonth, amount);
+      await upsertCostEntry(costItemId, selectedYear, selectedMonth, selectedShop, amount);
       setEntries((prev) => ({ ...prev, [costItemId]: amount }));
       toast.success("Saved");
     } catch (error) {
@@ -96,9 +123,27 @@ export function CostsForm({ categories }: { categories: Category[] }) {
 
   const total = Object.values(entries).reduce((sum, val) => sum + (val || 0), 0);
 
+  const isOrgView = selectedShop === "ORGANIZATION";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">View:</label>
+          <Button
+            variant={isOrgView ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedShop("ORGANIZATION")}
+            className="flex items-center gap-2"
+          >
+            <Building2 className="h-4 w-4" />
+            {organizationName}
+          </Button>
+          <ShopSelector
+            value={selectedShop === "ORGANIZATION" ? "" : selectedShop}
+            onValueChange={setSelectedShop}
+          />
+        </div>
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium">Month:</label>
           <Select
@@ -140,7 +185,11 @@ export function CostsForm({ categories }: { categories: Category[] }) {
         </div>
       </div>
 
-      {loading ? (
+      {!selectedShop ? (
+        <div className="text-center py-8 text-gray-500">
+          Please select a shop or organization to view and enter costs
+        </div>
+      ) : categoriesLoading || loading ? (
         <div className="text-center py-8 text-gray-500">Loading...</div>
       ) : categories.length === 0 ? (
         <div className="text-center py-8 text-gray-500">

@@ -17,6 +17,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          include: {
+            organizationUsers: {
+              take: 1,
+              orderBy: { createdAt: "asc" },
+            },
+          },
         });
 
         if (!user || !user.isActive) {
@@ -37,15 +43,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          currentOrganizationId: user.organizationUsers[0]?.organizationId,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.currentOrganizationId = user.currentOrganizationId;
+      }
+      // Support organization switching via session update
+      if (trigger === "update" && session?.currentOrganizationId) {
+        token.currentOrganizationId = session.currentOrganizationId;
       }
       return token;
     },
@@ -53,6 +65,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "USER";
+        session.user.currentOrganizationId = token.currentOrganizationId as
+          | string
+          | null
+          | undefined;
       }
       return session;
     },

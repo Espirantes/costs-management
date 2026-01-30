@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { OrganizationSwitcher } from "./organization-switcher";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -54,7 +55,8 @@ export function Navbar() {
               ))}
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center space-x-2">
+            <OrganizationSwitcher />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">

@@ -1,17 +1,12 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
-
-async function requireAuth() {
-  const session = await auth();
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-  return session;
-}
+import {
+  requireOrganization,
+  verifyShopAccess,
+} from "@/lib/organization-context";
 
 function validateMonthYear(month: number, year: number) {
   if (month < 1 || month > 12) {
@@ -22,12 +17,27 @@ function validateMonthYear(month: number, year: number) {
   }
 }
 
-export async function getCostEntries(year: number, month: number) {
-  await requireAuth();
+export async function getCostEntries(
+  year: number,
+  month: number,
+  shopId: string
+) {
+  const { organizationId } = await requireOrganization();
+
+  // If shopId is "ORGANIZATION", fetch org-level entries (shopId=null)
+  const isOrgView = shopId === "ORGANIZATION";
+  if (!isOrgView) {
+    await verifyShopAccess(shopId);
+  }
+
   validateMonthYear(month, year);
 
   const entries = await prisma.costEntry.findMany({
-    where: { year, month },
+    where: {
+      year,
+      month,
+      shopId: isOrgView ? null : shopId,
+    },
     select: {
       id: true,
       costItemId: true,
@@ -46,30 +56,57 @@ export async function upsertCostEntry(
   costItemId: string,
   year: number,
   month: number,
+  shopId: string,
   amount: number
 ) {
-  const session = await requireAuth();
+  const { userId, organizationId } = await requireOrganization();
+
+  // If shopId is "ORGANIZATION", save as org-level entry (shopId=null)
+  const isOrgView = shopId === "ORGANIZATION";
+  if (!isOrgView) {
+    await verifyShopAccess(shopId);
+  }
+
   validateMonthYear(month, year);
 
   if (amount < 0) {
     throw new Error("Amount must be non-negative");
   }
 
-  // Verify cost item exists
+  // Verify cost item exists and belongs to organization
   const costItem = await prisma.costItem.findUnique({
     where: { id: costItemId },
+    include: {
+      category: {
+        select: {
+          organizationId: true,
+          shopId: true,
+        },
+      },
+    },
   });
 
-  if (!costItem) {
-    throw new Error("Cost item not found");
+  if (!costItem || costItem.category.organizationId !== organizationId) {
+    throw new Error("Cost item not found or doesn't belong to your organization");
   }
+
+  // Verify cost item is available for this shop
+  // (org-level categories OR shop-specific for this shop)
+  if (costItem.category.shopId && costItem.category.shopId !== shopId) {
+    throw new Error(
+      "This cost item is not available for the selected shop"
+    );
+  }
+
+  const actualShopId = isOrgView ? null : shopId;
 
   // Get existing entry for audit log
   const existingEntry = await prisma.costEntry.findUnique({
     where: {
-      year_month_costItemId: {
+      year_month_shopId_costItemId: {
         year,
         month,
+        shopId: actualShopId,
         costItemId,
       },
     },
@@ -77,18 +114,20 @@ export async function upsertCostEntry(
 
   const entry = await prisma.costEntry.upsert({
     where: {
-      year_month_costItemId: {
+      year_month_shopId_costItemId: {
         year,
         month,
+        shopId: actualShopId,
         costItemId,
       },
     },
     create: {
       year,
       month,
+      shopId: actualShopId,
       costItemId,
       amount,
-      createdById: session.user.id,
+      createdById: userId,
     },
     update: {
       amount,
@@ -96,12 +135,15 @@ export async function upsertCostEntry(
   });
 
   await logAudit({
-    userId: session.user.id,
+    userId,
     action: existingEntry ? "UPDATE" : "CREATE",
     entity: "CostEntry",
     entityId: entry.id,
-    oldValue: existingEntry ? { amount: Number(existingEntry.amount), year, month } : undefined,
-    newValue: { amount, year, month, costItemName: costItem.name },
+    oldValue: existingEntry
+      ? { amount: Number(existingEntry.amount), year, month, shopId: actualShopId }
+      : undefined,
+    newValue: { amount, year, month, shopId: actualShopId, costItemName: costItem.name },
+    organizationId,
   });
 
   revalidatePath("/costs");
@@ -113,10 +155,18 @@ export async function bulkUpsertCostEntries(
     amount: number;
   }>,
   year: number,
-  month: number
+  month: number,
+  shopId: string
 ) {
-  const session = await requireAuth();
+  const { userId, organizationId } = await requireOrganization();
+
+  const isOrgView = shopId === "ORGANIZATION";
+  if (!isOrgView) {
+    await verifyShopAccess(shopId);
+  }
+
   validateMonthYear(month, year);
+  const actualShopId = isOrgView ? null : shopId;
 
   // Validate all amounts
   for (const entry of entries) {
@@ -125,23 +175,57 @@ export async function bulkUpsertCostEntries(
     }
   }
 
+  // Verify all cost items belong to organization
+  const costItemIds = entries.map((e) => e.costItemId);
+  const costItems = await prisma.costItem.findMany({
+    where: {
+      id: { in: costItemIds },
+    },
+    include: {
+      category: {
+        select: {
+          organizationId: true,
+          shopId: true,
+        },
+      },
+    },
+  });
+
+  // Verify all items exist and belong to organization
+  if (costItems.length !== costItemIds.length) {
+    throw new Error("One or more cost items not found");
+  }
+
+  for (const item of costItems) {
+    if (item.category.organizationId !== organizationId) {
+      throw new Error("One or more cost items don't belong to your organization");
+    }
+    if (item.category.shopId && item.category.shopId !== shopId) {
+      throw new Error(
+        `Cost item "${item.name}" is not available for the selected shop`
+      );
+    }
+  }
+
   // Use transaction for bulk update
   await prisma.$transaction(
     entries.map((entry) =>
       prisma.costEntry.upsert({
         where: {
-          year_month_costItemId: {
+          year_month_shopId_costItemId: {
             year,
             month,
+            shopId: actualShopId,
             costItemId: entry.costItemId,
           },
         },
         create: {
           year,
           month,
+          shopId: actualShopId,
           costItemId: entry.costItemId,
           amount: entry.amount,
-          createdById: session.user.id,
+          createdById: userId,
         },
         update: {
           amount: entry.amount,
