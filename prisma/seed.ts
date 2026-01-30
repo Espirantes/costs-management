@@ -72,9 +72,10 @@ async function main() {
     where: { email: adminEmail },
   });
 
+  let adminUser;
   if (!existingAdmin) {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
-    await prisma.user.create({
+    adminUser = await prisma.user.create({
       data: {
         email: adminEmail,
         name: "Administrator",
@@ -85,15 +86,39 @@ async function main() {
     });
     console.log(`Created admin user: ${adminEmail}`);
   } else {
+    adminUser = existingAdmin;
     console.log(`Admin user already exists: ${adminEmail}`);
+  }
+
+  // Create default organization
+  let organization = await prisma.organization.findFirst();
+  if (!organization) {
+    organization = await prisma.organization.create({
+      data: {
+        name: "Online Empire",
+        createdById: adminUser.id,
+        organizationUsers: {
+          create: {
+            userId: adminUser.id,
+            role: "OWNER",
+          },
+        },
+      },
+    });
+    console.log(`Created organization: ${organization.name}`);
+  } else {
+    console.log(`Organization already exists: ${organization.name}`);
   }
 
   // Create categories and items
   for (let i = 0; i < seedData.length; i++) {
     const categoryData = seedData[i];
 
-    const existingCategory = await prisma.category.findUnique({
-      where: { name: categoryData.name },
+    const existingCategory = await prisma.category.findFirst({
+      where: {
+        name: categoryData.name,
+        organizationId: organization.id,
+      },
     });
 
     if (existingCategory) {
@@ -105,6 +130,9 @@ async function main() {
       data: {
         name: categoryData.name,
         sortOrder: i + 1,
+        scope: "SHOP",
+        organizationId: organization.id,
+        createdById: adminUser.id,
       },
     });
 
@@ -117,6 +145,7 @@ async function main() {
           name: itemName,
           categoryId: category.id,
           sortOrder: j + 1,
+          createdById: adminUser.id,
         },
       });
     }
