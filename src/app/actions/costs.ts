@@ -98,7 +98,7 @@ export async function upsertCostEntry(
     );
   }
 
-  const actualShopId = isOrgView ? null : shopId;
+  const actualShopId: string | null = isOrgView ? null : shopId;
 
   // Get existing entry for audit log
   const existingEntry = await prisma.costEntry.findUnique({
@@ -106,7 +106,7 @@ export async function upsertCostEntry(
       year_month_shopId_costItemId: {
         year,
         month,
-        shopId: actualShopId,
+        shopId: actualShopId as any,
         costItemId,
       },
     },
@@ -117,14 +117,14 @@ export async function upsertCostEntry(
       year_month_shopId_costItemId: {
         year,
         month,
-        shopId: actualShopId,
+        shopId: actualShopId as any,
         costItemId,
       },
     },
     create: {
       year,
       month,
-      shopId: actualShopId,
+      shopId: actualShopId as any,
       costItemId,
       amount,
       createdById: userId,
@@ -166,7 +166,7 @@ export async function bulkUpsertCostEntries(
   }
 
   validateMonthYear(month, year);
-  const actualShopId = isOrgView ? null : shopId;
+  const actualShopId: string | null = isOrgView ? null : shopId;
 
   // Validate all amounts
   for (const entry of entries) {
@@ -215,14 +215,14 @@ export async function bulkUpsertCostEntries(
           year_month_shopId_costItemId: {
             year,
             month,
-            shopId: actualShopId,
+            shopId: actualShopId as any,
             costItemId: entry.costItemId,
           },
         },
         create: {
           year,
           month,
-          shopId: actualShopId,
+          shopId: actualShopId as any,
           costItemId: entry.costItemId,
           amount: entry.amount,
           createdById: userId,
