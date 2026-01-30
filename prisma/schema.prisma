@@ -20,8 +20,8 @@ enum OrgRole {
 }
 
 enum CategoryScope {
-  ORGANIZATION
-  SHOP
+  FIXED
+  VARIABLE
 }
 
 model Organization {
@@ -94,7 +94,7 @@ model Category {
   id             String        @id @default(cuid())
   name           String
   sortOrder      Int           @default(0)
-  scope          CategoryScope @default(SHOP)
+  scope          CategoryScope @default(VARIABLE)
   organizationId String
   shopId         String?
   createdAt      DateTime      @default(now())

@@ -123,7 +123,7 @@ export function CostsForm({
 
   const total = Object.values(entries).reduce((sum, val) => sum + (val || 0), 0);
 
-  const isOrgView = selectedShop === "ORGANIZATION";
+  const isOrgView = selectedShop === "FIXED";
 
   return (
     <div className="space-y-6">
@@ -133,14 +133,14 @@ export function CostsForm({
           <Button
             variant={isOrgView ? "default" : "outline"}
             size="sm"
-            onClick={() => setSelectedShop("ORGANIZATION")}
+            onClick={() => setSelectedShop("FIXED")}
             className="flex items-center gap-2"
           >
             <Building2 className="h-4 w-4" />
-            {organizationName}
+            Fixed Costs
           </Button>
           <ShopSelector
-            value={selectedShop === "ORGANIZATION" ? "" : selectedShop}
+            value={selectedShop === "FIXED" ? "" : selectedShop}
             onValueChange={setSelectedShop}
           />
         </div>

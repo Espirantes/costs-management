@@ -25,7 +25,7 @@ export async function getCostEntries(
   const { organizationId } = await requireOrganization();
 
   // If shopId is "ORGANIZATION", fetch org-level entries (shopId=null)
-  const isOrgView = shopId === "ORGANIZATION";
+  const isOrgView = shopId === "FIXED";
   if (!isOrgView) {
     await verifyShopAccess(shopId);
   }
@@ -62,7 +62,7 @@ export async function upsertCostEntry(
   const { userId, organizationId } = await requireOrganization();
 
   // If shopId is "ORGANIZATION", save as org-level entry (shopId=null)
-  const isOrgView = shopId === "ORGANIZATION";
+  const isOrgView = shopId === "FIXED";
   if (!isOrgView) {
     await verifyShopAccess(shopId);
   }
@@ -160,7 +160,7 @@ export async function bulkUpsertCostEntries(
 ) {
   const { userId, organizationId } = await requireOrganization();
 
-  const isOrgView = shopId === "ORGANIZATION";
+  const isOrgView = shopId === "FIXED";
   if (!isOrgView) {
     await verifyShopAccess(shopId);
   }

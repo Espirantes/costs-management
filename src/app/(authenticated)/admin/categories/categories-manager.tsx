@@ -47,7 +47,7 @@ type CostItem = {
 type Category = {
   id: string;
   name: string;
-  scope: "ORGANIZATION" | "SHOP";
+  scope: "FIXED" | "VARIABLE";
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -71,7 +71,7 @@ export function CategoriesManager({ categories }: { categories: Category[] }) {
 function CreateCategoryDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [scope, setScope] = useState<"ORGANIZATION" | "SHOP">("SHOP");
+  const [scope, setScope] = useState<"FIXED" | "VARIABLE">("VARIABLE");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -82,7 +82,7 @@ function CreateCategoryDialog() {
       toast.success("Category created");
       setOpen(false);
       setName("");
-      setScope("SHOP");
+      setScope("VARIABLE");
     } catch (error) {
       toast.error("Failed to create category");
     }
@@ -110,17 +110,17 @@ function CreateCategoryDialog() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="category-scope">Scope</Label>
-            <Select value={scope} onValueChange={(v) => setScope(v as "ORGANIZATION" | "SHOP")}>
+            <Select value={scope} onValueChange={(v) => setScope(v as "FIXED" | "VARIABLE")}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ORGANIZATION">Organization</SelectItem>
-                <SelectItem value="SHOP">E-shop</SelectItem>
+                <SelectItem value="FIXED">Fixed Costs</SelectItem>
+                <SelectItem value="VARIABLE">E-shop</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500">
-              Organization: shared across all shops. E-shop: separate for each shop.
+              Fixed Costs: shared across all shops. E-shop: separate for each shop.
             </p>
           </div>
           <div className="flex justify-end space-x-2">
@@ -188,7 +188,7 @@ function CategoryCard({ category }: { category: Category }) {
               />
               <Select
                 value={editScope}
-                onValueChange={(v) => setEditScope(v as "ORGANIZATION" | "SHOP")}
+                onValueChange={(v) => setEditScope(v as "FIXED" | "VARIABLE")}
               >
                 <SelectTrigger className="w-[140px]">
                   <SelectValue />
@@ -219,12 +219,12 @@ function CategoryCard({ category }: { category: Category }) {
                 <CardTitle className="text-lg">{category.name}</CardTitle>
                 <span
                   className={`text-xs px-2 py-1 rounded ${
-                    category.scope === "ORGANIZATION"
+                    category.scope === "FIXED"
                       ? "bg-blue-100 text-blue-700"
                       : "bg-green-100 text-green-700"
                   }`}
                 >
-                  {category.scope === "ORGANIZATION" ? "Organization" : "E-shop"}
+                  {category.scope === "FIXED" ? "Fixed Costs" : "E-shop"}
                 </span>
               </div>
               <div className="space-x-2">

@@ -8,8 +8,14 @@ interface MonthlyData {
   [key: string]: number | string; // category names or "total"
 }
 
+/**
+ * viewType:
+ *   "ALL"    — all costs in the organization (fixed + all shops)
+ *   "FIXED"  — only fixed costs (entries with shopId = null)
+ *   "ESHOP"  — costs for a specific shop (entries with shopId = shopId)
+ */
 export async function getStatistics(
-  viewType: "ORGANIZATION" | "SHOP",
+  viewType: "ALL" | "FIXED" | "ESHOP",
   shopId?: string,
   groupBy: "total" | "categories" = "total"
 ): Promise<MonthlyData[]> {
@@ -36,13 +42,14 @@ export async function getStatistics(
     OR: months.map((m) => ({ year: m.year, month: m.month })),
   };
 
-  // Filter by shop if SHOP view
-  if (viewType === "SHOP" && shopId) {
+  if (viewType === "FIXED") {
+    // Only entries with shopId = null (fixed costs)
+    whereClause.shopId = null;
+  } else if (viewType === "ESHOP" && shopId) {
+    // Only entries for the selected shop
     whereClause.shopId = shopId;
-  } else if (viewType === "ORGANIZATION") {
-    // For organization view, we want all shops
-    whereClause.costItem.category.scope = "ORGANIZATION";
   }
+  // "ALL" — no additional filter, returns everything
 
   // Fetch cost entries with category info
   const entries = await prisma.costEntry.findMany({
@@ -60,14 +67,13 @@ export async function getStatistics(
   // Group data by month
   const monthlyDataMap = new Map<string, MonthlyData>();
 
-  // Initialize all months with 0 values
+  // Initialize all months
   months.forEach(({ year, month }) => {
     const monthKey = `${year}-${String(month).padStart(2, "0")}`;
     monthlyDataMap.set(monthKey, { month: monthKey });
   });
 
   if (groupBy === "total") {
-    // Sum all costs per month
     entries.forEach((entry) => {
       const monthKey = `${entry.year}-${String(entry.month).padStart(2, "0")}`;
       const monthData = monthlyDataMap.get(monthKey);
@@ -77,7 +83,6 @@ export async function getStatistics(
       }
     });
   } else {
-    // Group by categories
     entries.forEach((entry) => {
       const monthKey = `${entry.year}-${String(entry.month).padStart(2, "0")}`;
       const categoryName = entry.costItem.category.name;
@@ -93,7 +98,7 @@ export async function getStatistics(
 }
 
 export async function getStatisticsCategories(
-  viewType: "ORGANIZATION" | "SHOP",
+  viewType: "ALL" | "FIXED" | "ESHOP",
   shopId?: string
 ): Promise<string[]> {
   const { organizationId } = await requireOrganization();
@@ -102,11 +107,12 @@ export async function getStatisticsCategories(
     organizationId,
   };
 
-  if (viewType === "ORGANIZATION") {
-    whereClause.scope = "ORGANIZATION";
-  } else if (viewType === "SHOP" && shopId) {
-    whereClause.OR = [{ scope: "ORGANIZATION" }, { scope: "SHOP", shopId }];
+  if (viewType === "FIXED") {
+    whereClause.scope = "FIXED";
+  } else if (viewType === "ESHOP") {
+    whereClause.scope = "VARIABLE";
   }
+  // "ALL" — no scope filter, returns all categories
 
   const categories = await prisma.category.findMany({
     where: whereClause,

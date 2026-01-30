@@ -130,7 +130,7 @@ async function main() {
       data: {
         name: categoryData.name,
         sortOrder: i + 1,
-        scope: "SHOP",
+        scope: "VARIABLE",
         organizationId: organization.id,
         createdById: adminUser.id,
       },

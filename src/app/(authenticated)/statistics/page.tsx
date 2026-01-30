@@ -41,7 +41,7 @@ const COLORS = [
 ];
 
 export default function StatisticsPage() {
-  const [viewType, setViewType] = useState<"ORGANIZATION" | "SHOP">("ORGANIZATION");
+  const [viewType, setViewType] = useState<"ALL" | "FIXED" | "ESHOP">("ALL");
   const [groupBy, setGroupBy] = useState<"total" | "categories">("total");
   const [selectedShop, setSelectedShop] = useState<string>("");
   const [shops, setShops] = useState<Shop[]>([]);
@@ -68,7 +68,7 @@ export default function StatisticsPage() {
 
   // Load statistics data whenever filters change
   const loadData = useCallback(async () => {
-    if (viewType === "SHOP" && !selectedShop) {
+    if (viewType === "ESHOP" && !selectedShop) {
       return;
     }
 
@@ -103,6 +103,12 @@ export default function StatisticsPage() {
     }).format(value);
   };
 
+  const viewDescriptions = {
+    ALL: "All costs — fixed + all shops",
+    FIXED: "Fixed costs only (shared across shops)",
+    ESHOP: "Costs for the selected shop",
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div>
@@ -117,39 +123,32 @@ export default function StatisticsPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* View Type Toggle */}
+          {/* View Type Select */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="view-type">View Type</Label>
+              <Label htmlFor="view-type">View</Label>
               <p className="text-sm text-muted-foreground">
-                {viewType === "ORGANIZATION"
-                  ? "Organization-wide costs"
-                  : "Individual shop costs"}
+                {viewDescriptions[viewType]}
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={viewType === "ORGANIZATION" ? "font-medium" : "text-muted-foreground"}>
-                Organization
-              </span>
-              <Switch
-                id="view-type"
-                checked={viewType === "SHOP"}
-                onCheckedChange={(checked) =>
-                  setViewType(checked ? "SHOP" : "ORGANIZATION")
-                }
-              />
-              <span className={viewType === "SHOP" ? "font-medium" : "text-muted-foreground"}>
-                E-shop
-              </span>
-            </div>
+            <Select value={viewType} onValueChange={(v) => setViewType(v as "ALL" | "FIXED" | "ESHOP")}>
+              <SelectTrigger id="view-type" className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Organization</SelectItem>
+                <SelectItem value="FIXED">Fixed Costs</SelectItem>
+                <SelectItem value="ESHOP">E-shop</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Shop Selector - Only visible in SHOP view */}
-          {viewType === "SHOP" && (
-            <div className="space-y-2">
-              <Label htmlFor="shop-select">Select Shop</Label>
+          {/* Shop Selector - Only visible in ESHOP view */}
+          {viewType === "ESHOP" && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="shop-select">Shop</Label>
               <Select value={selectedShop} onValueChange={setSelectedShop}>
-                <SelectTrigger id="shop-select">
+                <SelectTrigger id="shop-select" className="w-[200px]">
                   <SelectValue placeholder="Select a shop" />
                 </SelectTrigger>
                 <SelectContent>

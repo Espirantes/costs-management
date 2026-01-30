@@ -12,13 +12,13 @@ export async function getCategories(shopId?: string) {
   const { organizationId } = await requireOrganization();
 
   // If no shopId provided (admin view), return all categories
-  // If shopId is "ORGANIZATION", get only ORGANIZATION scope categories
-  // If shopId is a specific shop, get only SHOP scope categories
+  // If shopId is "FIXED", get only FIXED scope categories
+  // If shopId is a specific shop, get only VARIABLE scope categories
   const whereClause: any = { organizationId };
 
   if (shopId) {
-    const isOrgView = shopId === "ORGANIZATION";
-    whereClause.scope = isOrgView ? "ORGANIZATION" : "SHOP";
+    const isFixedView = shopId === "FIXED";
+    whereClause.scope = isFixedView ? "FIXED" : "VARIABLE";
   }
 
   return prisma.category.findMany({
@@ -36,12 +36,12 @@ export async function getCategories(shopId?: string) {
 export async function getCategoriesWithItems(shopId?: string) {
   const { organizationId } = await requireOrganization();
 
-  const isOrgView = shopId === "ORGANIZATION";
+  const isFixedView = shopId === "FIXED";
 
   return prisma.category.findMany({
     where: {
       organizationId,
-      scope: isOrgView ? "ORGANIZATION" : "SHOP",
+      scope: isFixedView ? "FIXED" : "VARIABLE",
     },
     orderBy: { sortOrder: "asc" },
     include: {
@@ -66,7 +66,7 @@ export async function getCategoriesWithItems(shopId?: string) {
 
 export async function createCategory(
   name: string,
-  scope: "ORGANIZATION" | "SHOP"
+  scope: "FIXED" | "VARIABLE"
 ) {
   const { userId, organizationId } = await requireOrgAdmin();
 
@@ -101,7 +101,7 @@ export async function createCategory(
 export async function updateCategory(
   id: string,
   name: string,
-  scope?: "ORGANIZATION" | "SHOP"
+  scope?: "FIXED" | "VARIABLE"
 ) {
   const { userId, organizationId } = await requireOrgAdmin();
 
