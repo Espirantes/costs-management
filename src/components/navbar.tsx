@@ -22,6 +22,7 @@ export function Navbar() {
 
   const navItems = [
     { href: "/costs", label: "Costs" },
+    { href: "/statistics", label: "Statistics" },
     ...(isAdmin
       ? [
           { href: "/admin/users", label: "Users" },
