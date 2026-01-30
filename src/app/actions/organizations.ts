@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import {
   requireAuth,
   requireOrganization,
+  requireOrgAdmin,
   getUserOrganizations,
 } from "@/lib/organization-context";
 import { revalidatePath } from "next/cache";
@@ -48,7 +49,7 @@ export async function inviteUserToOrganization(
   email: string,
   role: OrgRole = OrgRole.MEMBER
 ) {
-  const { organizationId, orgRole } = await requireOrganization();
+  const { organizationId, orgRole } = await requireOrgAdmin();
 
   // Only OWNER and ADMIN can invite users
   if (orgRole !== OrgRole.OWNER && orgRole !== OrgRole.ADMIN) {
@@ -122,7 +123,7 @@ export async function updateOrganizationUserRole(
   organizationUserId: string,
   newRole: OrgRole
 ) {
-  const { organizationId, orgRole } = await requireOrganization();
+  const { organizationId, orgRole } = await requireOrgAdmin();
 
   // Only OWNER can change roles
   if (orgRole !== OrgRole.OWNER) {
@@ -148,7 +149,7 @@ export async function updateOrganizationUserRole(
 }
 
 export async function removeOrganizationUser(organizationUserId: string) {
-  const { organizationId, orgRole } = await requireOrganization();
+  const { organizationId, orgRole } = await requireOrgAdmin();
 
   // Only OWNER and ADMIN can remove users
   if (orgRole !== OrgRole.OWNER && orgRole !== OrgRole.ADMIN) {
